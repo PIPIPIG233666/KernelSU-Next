@@ -99,6 +99,9 @@ static ssize_t my_write_context(struct file *file, char *buf, size_t size)
     if (likely(current_uid().val < 10000)) {
         return orig_context_write(file, buf, size);
     }
+    if (strstr(buf, "u:r:adbroot:s0")) {
+        return -EINVAL;
+    }
     char *canon = NULL;
     u32 sid, len;
     ssize_t length;
@@ -143,6 +146,10 @@ static ssize_t my_write_access(struct file *file, char *buf, size_t size)
     struct av_decision avd;
     ssize_t length;
 
+    if ((strstr(buf, "u:r:shell:s0") && strstr(buf, "u:r:su:s0")) || strstr(buf, "u:r:fsck_untrusted:s0") || strstr(buf, "u:r:adbroot:s0")) {
+        length = -EINVAL;
+        goto out;
+    }
     length = ksu_avc_has_perm_compat(current_sid(), SECINITSID_SECURITY, SECCLASS_SECURITY, SECURITY__COMPUTE_AV, NULL);
     if (length)
         goto out;
@@ -255,6 +262,9 @@ static int __nocfi my_setprocattr(const char *name, void *value, size_t size)
         if (str[size - 1] == '\n') {
             str[size - 1] = 0;
             size--;
+        }
+        if (strstr(str, "u:r:adbroot:s0")) {
+            return -EINVAL;
         }
         error = security_context_to_sid_live(value, size, &sid);
         if (error == -EAGAIN) {
